@@ -10,10 +10,29 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+let memoryPath = '';
 
-// Define the path to the JSONL file, you can change this to your desired local path
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--path' || args[i] === '-p') {
+    memoryPath = args[i + 1];
+    break;
+  }
+}
+
+// If no path provided, use default in package directory
+if (!memoryPath) {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  memoryPath = path.join(__dirname, 'memory.json');
+} else {
+  // Resolve relative paths from current working directory
+  memoryPath = path.resolve(process.cwd(), memoryPath);
+}
+
+// Ensure the directory exists
+await fs.mkdir(path.dirname(memoryPath), { recursive: true });
+console.error("Using memory file:", memoryPath);
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
@@ -37,7 +56,7 @@ interface KnowledgeGraph {
 class KnowledgeGraphManager {
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
-      const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
+      const data = await fs.readFile(memoryPath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
       return lines.reduce((graph: KnowledgeGraph, line) => {
         const item = JSON.parse(line);
@@ -58,7 +77,7 @@ class KnowledgeGraphManager {
       ...graph.entities.map(e => JSON.stringify({ type: "entity", ...e })),
       ...graph.relations.map(r => JSON.stringify({ type: "relation", ...r })),
     ];
-    await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
+    await fs.writeFile(memoryPath, lines.join("\n"));
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
